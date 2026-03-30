@@ -18,10 +18,6 @@ const data = [
     q: "Who is behind Bad Frogs?",
     a: "An independent creator exploring a raw, spray-inspired style. :)",
   },
-  {
-    q: "Why should I mint?",
-    a: "Only if you genuinely like the art and want to own a piece of it.",
-  },
 ];
 
 function About() {
