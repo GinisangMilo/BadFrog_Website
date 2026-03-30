@@ -1,10 +1,7 @@
 import { useState } from "react";
 
 const data = [
-  {
-    q: "What do I get if I mint one?",
-    a: "You get a unique frog artwork from the Bad Frogs collection, that's it, no hidden promises.",
-  },
+ 
   {
     q: "Is there a roadmap?",
     a: "No fixed roadmap. Bad Frogs is about art first anything else comes naturally, if at all.",
