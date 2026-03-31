@@ -1,8 +1,13 @@
 import { useEffect, useState, useRef } from "react";
 import { getNFTs } from "../api";
 import FilterPanel from "../components/FilterPanel";
-import Tilt from "react-parallax-tilt";
 import { motion } from "framer-motion";
+
+const MAX_SUPPLY = 4444;
+
+// ✅ BADFROGS CONTRACT
+const CONTRACT_ADDRESS = "0x13e2a004ea4c77412c9806daadafd09de65645a3";
+const CHAIN = "ethereum";
 
 function Gallery() {
   const [nfts, setNfts] = useState([]);
@@ -11,10 +16,15 @@ function Gallery() {
   const [selectedTraits, setSelectedTraits] = useState({});
   const [cursor, setCursor] = useState(null);
   const [loading, setLoading] = useState(false);
-
   const [selectedNFT, setSelectedNFT] = useState(null);
 
+  const [baseSupply, setBaseSupply] = useState(0);
+
+  // 🔎 SEARCH STATE (ADDED)
+  const [searchId, setSearchId] = useState("");
+
   const loaderRef = useRef(null);
+  const galleryRef = useRef(null);
 
   useEffect(() => {
     loadNFTs();
@@ -22,29 +32,37 @@ function Gallery() {
 
   useEffect(() => {
     applyFilters();
-  }, [selectedTraits, nfts]);
+  }, [selectedTraits, nfts, searchId]);
 
   useEffect(() => {
-    const observer = new IntersectionObserver((entries) => {
-      if (entries[0].isIntersecting && cursor) {
-        loadMore();
+    if (filtered.length === 0) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && cursor) {
+          loadMore();
+        }
+      },
+      {
+        root: galleryRef.current,
+        rootMargin: "200px",
       }
-    });
+    );
 
     if (loaderRef.current) observer.observe(loaderRef.current);
-
     return () => observer.disconnect();
-  }, [cursor, nfts]);
+  }, [cursor, nfts, filtered]);
 
   const loadNFTs = async () => {
     setLoading(true);
     const res = await getNFTs();
 
     setNfts(res.nfts);
-    setFiltered(res.nfts);
     setCursor(res.nextCursor);
 
     buildTraits(res.nfts);
+    calculateSupply(res.nfts);
+
     setLoading(false);
   };
 
@@ -57,10 +75,11 @@ function Gallery() {
     const newNFTs = [...nfts, ...res.nfts];
 
     setNfts(newNFTs);
-    setFiltered(newNFTs);
     setCursor(res.nextCursor);
 
     buildTraits(newNFTs);
+    calculateSupply(newNFTs);
+
     setLoading(false);
   };
 
@@ -76,7 +95,23 @@ function Gallery() {
       });
     });
 
-    setTraits(traitMap);
+    const finalTraits = {};
+    Object.keys(traitMap).forEach((key) => {
+      finalTraits[key] = Array.from(traitMap[key]);
+    });
+
+    setTraits(finalTraits);
+  };
+
+  const calculateSupply = (data) => {
+    const burned = data.filter(
+      (nft) =>
+        !nft.owner ||
+        nft.owner === "0x000000000000000000000000000000000000dead"
+    ).length;
+
+    const alive = MAX_SUPPLY - burned;
+    setBaseSupply(alive);
   };
 
   const toggleTrait = (type, value) => {
@@ -95,8 +130,16 @@ function Gallery() {
     });
   };
 
+  // 🔥 UPDATED FILTER (WITH SEARCH)
   const applyFilters = () => {
     let result = [...nfts];
+
+    // 🔎 SEARCH BY NFT NUMBER
+    if (searchId.trim() !== "") {
+      result = result.filter(
+        (nft) => nft.identifier.toString() === searchId
+      );
+    }
 
     Object.keys(selectedTraits).forEach((type) => {
       const values = selectedTraits[type];
@@ -113,102 +156,131 @@ function Gallery() {
     setFiltered(result);
   };
 
+  const openOnOpenSea = (nft) => {
+    const tokenId = nft.identifier;
+    const url = `https://opensea.io/assets/${CHAIN}/${CONTRACT_ADDRESS}/${tokenId}`;
+    window.open(url, "_blank");
+  };
+
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="flex min-h-screen bg-gray-50 text-gray-900"
-    >
-      {/* Sidebar */}
-      <div className="hidden md:block w-72 border-r border-gray-200 p-4 bg-white">
-        <FilterPanel
-          traits={traits}
-          selectedTraits={selectedTraits}
-          toggleTrait={toggleTrait}
-        />
+    <motion.div className="flex h-screen overflow-hidden bg-[#f5f5f5]">
+
+      {/* SIDEBAR */}
+      <div className="hidden md:flex w-72 border-r bg-white flex-col h-full">
+        <div className="p-4 border-b sticky top-0 bg-white z-10">
+          <h2 className="text-lg font-bold">FILTER</h2>
+        </div>
+
+        <div className="flex-1 overflow-y-auto no-scrollbar p-4">
+          <FilterPanel
+            traits={traits}
+            selectedTraits={selectedTraits}
+            toggleTrait={toggleTrait}
+            searchId={searchId}          // ✅ PASS
+            setSearchId={setSearchId}    // ✅ PASS
+          />
+        </div>
       </div>
 
-      {/* Gallery */}
-      <div className="flex-1 p-4 md:p-6">
+      {/* GALLERY */}
+      <div
+        ref={galleryRef}
+        className="flex-1 overflow-y-auto no-scrollbar p-6"
+      >
         <div className="max-w-[1400px] mx-auto">
 
-          {/* Mobile Filters */}
-          <div className="md:hidden mb-4">
-            <FilterPanel
-              traits={traits}
-              selectedTraits={selectedTraits}
-              toggleTrait={toggleTrait}
-            />
+          <div className="mb-6">
+            <h1 className="text-xl font-bold">BADFROGS</h1>
+            <p className="text-sm text-gray-500">
+              {baseSupply} items
+            </p>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
+          {filtered.length === 0 && nfts.length > 0 ? (
+            <div className="flex items-center justify-center h-[300px] text-center">
+              <div>
+                <p className="text-lg font-semibold mb-2">
+                  No Bad Frogs matched your filter
+                </p>
+                <p className="text-sm text-gray-500">
+                  Try adjusting your traits
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6">
 
-            {filtered.map((nft) => (
-              <Tilt
-                key={nft.identifier}
-                glareEnable={true}
-                glareMaxOpacity={0.2}
-                scale={1.05}
-              >
+              {filtered.map((nft) => (
                 <div
+                  key={nft.identifier}
                   onClick={() => setSelectedNFT(nft)}
-                  className="bg-white rounded-xl overflow-hidden shadow-sm hover:shadow-xl transition cursor-pointer"
+                  className="bg-[#eeeeee] rounded-2xl overflow-hidden cursor-pointer hover:scale-[1.03] transition"
                 >
                   <img
                     src={nft.image_url}
-                    alt={nft.name}
-                    className="w-full h-48 object-cover"
+                    className="w-full aspect-square object-cover"
                   />
-                  <p className="text-sm p-2 truncate">{nft.name}</p>
-                </div>
-              </Tilt>
-            ))}
 
-            {/* Skeleton */}
-            {loading &&
-              Array.from({ length: 8 }).map((_, i) => (
-                <div
-                  key={i}
-                  className="bg-gray-200 animate-pulse h-48 rounded-xl"
-                />
+                  <div className="p-2 text-center">
+                    <p className="text-xs text-gray-500">BADFROGS</p>
+                    <p className="text-sm font-medium">
+                      NO. {nft.identifier}
+                    </p>
+                  </div>
+                </div>
               ))}
-          </div>
+
+            </div>
+          )}
+
         </div>
 
         <div ref={loaderRef} className="h-10"></div>
       </div>
 
-      {/* NFT MODAL (Azuki style) */}
+      {/* MODAL */}
       {selectedNFT && (
         <div
           onClick={() => setSelectedNFT(null)}
-          className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4"
+          className="fixed inset-0 bg-black/70 flex items-center justify-center z-50"
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="bg-white rounded-xl max-w-md w-full p-4"
+            className="bg-[#eaeaea] rounded-2xl max-w-5xl w-full flex overflow-hidden"
           >
-            <img
-              src={selectedNFT.image_url}
-              className="rounded-lg mb-4"
-            />
-
-            <h2 className="font-bold mb-2">{selectedNFT.name}</h2>
-
-            <div className="grid grid-cols-2 gap-2">
-              {selectedNFT.traits?.map((t, i) => (
-                <div
-                  key={i}
-                  className="border rounded-lg p-2 text-xs"
-                >
-                  <p className="text-gray-500">{t.trait_type}</p>
-                  <p className="font-semibold">{t.value}</p>
-                </div>
-              ))}
+            <div className="w-1/2 bg-gray-300 flex items-center justify-center">
+              <img src={selectedNFT.image_url} className="max-h-[500px]" />
             </div>
+
+            <div className="w-1/2 p-6 flex flex-col">
+              <h2 className="text-2xl font-bold mb-6">
+                BADFROG #{selectedNFT.identifier}
+              </h2>
+
+              <div className="grid grid-cols-2 gap-3 mb-6">
+                {selectedNFT.traits?.map((t, i) => (
+                  <div key={i} className="bg-white/70 border rounded-lg p-3">
+                    <p className="text-xs text-gray-500 uppercase">
+                      {t.trait_type}
+                    </p>
+                    <p className="font-semibold text-sm">{t.value}</p>
+                  </div>
+                ))}
+              </div>
+
+              <button
+                onClick={() => openOnOpenSea(selectedNFT)}
+                className="mt-auto bg-black text-white py-3 rounded-xl font-semibold hover:opacity-90 transition"
+              >
+                View on OpenSea
+              </button>
+
+            </div>
+
           </div>
         </div>
       )}
+
     </motion.div>
   );
 }

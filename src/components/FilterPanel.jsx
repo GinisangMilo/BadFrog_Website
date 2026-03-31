@@ -11,45 +11,52 @@ function FilterPanel({ traits, selectedTraits, toggleTrait }) {
   };
 
   return (
-    <div>
-      <h2 className="text-xl font-bold mb-4">FILTER</h2>
+    <div className="h-full flex flex-col">
+      {/* SCROLL AREA */}
+      <div className="flex-1 overflow-y-auto no-scrollbar pr-2 space-y-4">
 
-      {Object.keys(traits).map((type) => (
-        <div key={type} className="border-b border-gray-200 py-2">
-          {/* Header */}
-          <div
-            onClick={() => toggleSection(type)}
-            className="flex justify-between items-center cursor-pointer"
-          >
-            <span className="uppercase text-sm">{type}</span>
-            <span>{open[type] ? "−" : "+"}</span>
-          </div>
+        {Object.keys(traits)
+          .sort()
+          .map((type) => (
+            <div key={type} className="border-b border-gray-200 pb-3">
 
-          {/* Options */}
-          {open[type] && (
-            <div className="mt-2 space-y-1">
-              {[...traits[type]].map((val) => {
-                const active = selectedTraits[type]?.has(val);
+              <div
+                onClick={() => toggleSection(type)}
+                className="flex justify-between items-center cursor-pointer"
+              >
+                <span className="uppercase text-xs font-semibold text-gray-600">
+                  {type}
+                </span>
+                <span>{open[type] ? "−" : "+"}</span>
+              </div>
 
-                return (
-                  <div
-                    key={val}
-                    onClick={() => toggleTrait(type, val)}
-                    className={`text-sm cursor-pointer px-2 py-1 rounded transition
-                      ${
-                        active
-                          ? "bg-green-600 text-white"
-                          : "text-gray-700 hover:bg-green-600 hover:text-white"
-                      }`}
-                  >
-                    {val}
-                  </div>
-                );
-              })}
+              {open[type] && (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {traits[type]?.slice().sort().map((val) => {
+                    const active = selectedTraits[type]?.has(val);
+
+                    return (
+                      <div
+                        key={`${type}-${val}`}
+                        onClick={() => toggleTrait(type, val)}
+                        className={`text-xs px-2 py-1 rounded-md cursor-pointer transition
+                          ${
+                            active
+                              ? "bg-black text-white"
+                              : "bg-gray-100 hover:bg-black hover:text-white"
+                          }`}
+                      >
+                        {val}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
             </div>
-          )}
-        </div>
-      ))}
+          ))}
+
+      </div>
     </div>
   );
 }
