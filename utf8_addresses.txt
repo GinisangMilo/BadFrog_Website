@@ -1,0 +1,25 @@
+﻿
+1061561b00d554e577edd711670
+2557016851742:src/pages/Gal
+lery.jsx:const 
+CONTRACT_ADDRESS = "0x13e2a
+004ea4c77412c9806daadafd09d
+e65645a3";
+1061561b00d554e577edd711670
+2557016851742:src/pages/Gal
+lery.jsx:        nft.owner 
+=== "0x00000000000000000000
+0000000000000000dead"
+1f68c21fb06f2e8624d42656814
+f7a904cd1b624:src/pages/Gal
+lery.jsx:const 
+CONTRACT_ADDRESS = "0x13e2a
+004ea4c77412c9806daadafd09d
+e65645a3";
+1f68c21fb06f2e8624d42656814
+f7a904cd1b624:src/pages/Gal
+lery.jsx:        nft.owner 
+=== "0x00000000000000000000
+0000000000000000dead"
+
+

@@ -1,7 +1,9 @@
-import { useEffect, useState, useRef } from "react";
-import { getNFTs } from "../api";
+import { useEffect, useState, useRef, useCallback } from "react";
+import { getCollectionStats } from "../api";
 import FilterPanel from "../components/FilterPanel";
+import NftViewer from "../components/NftViewer";
 import { motion } from "framer-motion";
+import { resolveDisplayName } from "../utils/displayName";
 
 const MAX_SUPPLY = 4444;
 
@@ -9,79 +11,53 @@ const MAX_SUPPLY = 4444;
 const CONTRACT_ADDRESS = "0x13e2a004ea4c77412c9806daadafd09de65645a3";
 const CHAIN = "ethereum";
 
-function Gallery() {
+function Gallery({ isWindowed, openWindow, globalNfts = [] }) {
   const [nfts, setNfts] = useState([]);
   const [filtered, setFiltered] = useState([]);
   const [traits, setTraits] = useState({});
   const [selectedTraits, setSelectedTraits] = useState({});
-  const [cursor, setCursor] = useState(null);
+  const [visibleCount, setVisibleCount] = useState(40);
   const [loading, setLoading] = useState(false);
   const [selectedNFT, setSelectedNFT] = useState(null);
 
   const [baseSupply, setBaseSupply] = useState(0);
+  const [burnedSupply, setBurnedSupply] = useState(0);
 
-  // 🔎 SEARCH STATE (ADDED)
   const [searchId, setSearchId] = useState("");
 
-  const loaderRef = useRef(null);
   const galleryRef = useRef(null);
 
   useEffect(() => {
-    loadNFTs();
-  }, []);
+    setNfts(globalNfts);
+    buildTraits(globalNfts);
+    fetchStats();
+  }, [globalNfts]);
+
+  const fetchStats = async () => {
+    try {
+      const stats = await getCollectionStats();
+      const openSeaSupply = stats.total_supply || 0;
+      setBaseSupply(openSeaSupply);
+      setBurnedSupply(MAX_SUPPLY - openSeaSupply);
+    } catch (error) {
+      console.error("Failed to fetch collection stats:", error);
+    }
+  };
 
   useEffect(() => {
     applyFilters();
   }, [selectedTraits, nfts, searchId]);
 
-  useEffect(() => {
-    if (filtered.length === 0) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting && cursor) {
-          loadMore();
-        }
-      },
-      {
-        root: galleryRef.current,
-        rootMargin: "200px",
+  const observerRef = useRef();
+  const lastElementRef = useCallback((node) => {
+    if (observerRef.current) observerRef.current.disconnect();
+    observerRef.current = new IntersectionObserver(entries => {
+      if (entries[0].isIntersecting) {
+        setVisibleCount(prev => prev + 40);
       }
-    );
-
-    if (loaderRef.current) observer.observe(loaderRef.current);
-    return () => observer.disconnect();
-  }, [cursor, nfts, filtered]);
-
-  const loadNFTs = async () => {
-    setLoading(true);
-    const res = await getNFTs();
-
-    setNfts(res.nfts);
-    setCursor(res.nextCursor);
-
-    buildTraits(res.nfts);
-    calculateSupply(res.nfts);
-
-    setLoading(false);
-  };
-
-  const loadMore = async () => {
-    if (!cursor || loading) return;
-
-    setLoading(true);
-    const res = await getNFTs(cursor);
-
-    const newNFTs = [...nfts, ...res.nfts];
-
-    setNfts(newNFTs);
-    setCursor(res.nextCursor);
-
-    buildTraits(newNFTs);
-    calculateSupply(newNFTs);
-
-    setLoading(false);
-  };
+    });
+    if (node) observerRef.current.observe(node);
+  }, []);
 
   const buildTraits = (data) => {
     let traitMap = {};
@@ -103,17 +79,6 @@ function Gallery() {
     setTraits(finalTraits);
   };
 
-  const calculateSupply = (data) => {
-    const burned = data.filter(
-      (nft) =>
-        !nft.owner ||
-        nft.owner === "0x000000000000000000000000000000000000dead"
-    ).length;
-
-    const alive = MAX_SUPPLY - burned;
-    setBaseSupply(alive);
-  };
-
   const toggleTrait = (type, value) => {
     setSelectedTraits((prev) => {
       const updated = { ...prev };
@@ -130,14 +95,13 @@ function Gallery() {
     });
   };
 
-  // 🔥 UPDATED FILTER (WITH SEARCH)
   const applyFilters = () => {
     let result = [...nfts];
 
-    // 🔎 SEARCH BY NFT NUMBER
     if (searchId.trim() !== "") {
+      const cleanSearch = searchId.replace("https:/badfrogs/gallery/", "").replace("#", "").trim();
       result = result.filter(
-        (nft) => nft.identifier.toString() === searchId
+        (nft) => nft.identifier.toString().includes(cleanSearch)
       );
     }
 
@@ -154,21 +118,32 @@ function Gallery() {
     });
 
     setFiltered(result);
+    setVisibleCount(40);
   };
 
-  const openOnOpenSea = (nft) => {
-    const tokenId = nft.identifier;
-    const url = `https://opensea.io/assets/${CHAIN}/${CONTRACT_ADDRESS}/${tokenId}`;
-    window.open(url, "_blank");
-  };
+  const displayedNfts = filtered.slice(0, visibleCount);
 
   return (
-    <motion.div className="flex h-screen overflow-hidden bg-[#f5f5f5]">
+    <div className="flex flex-col h-full bg-[#c0c0c0]">
+      <div className="flex items-center gap-2 px-2 py-1 border-b shadow-sm border-gray-400 bg-[#c0c0c0]">
+        <span className="text-sm font-semibold">Address:</span>
+        <div className="flex-1 bg-white border border-gray-500 border-r-white border-b-white px-2 py-1 flex items-center">
+          <span className="text-sm text-gray-500">https:/badfrogs/gallery/</span>
+          <input
+            type="text"
+            value={searchId}
+            onChange={(e) => setSearchId(e.target.value)}
+            placeholder=""
+            className="flex-1 outline-none text-sm text-black ml-1"
+          />
+        </div>
+      </div>
 
-      {/* SIDEBAR */}
-      <div className="hidden md:flex w-72 border-r bg-white flex-col h-full">
-        <div className="p-4 border-b sticky top-0 bg-white z-10">
-          <h2 className="text-lg font-bold">FILTER</h2>
+    <motion.div className={`flex flex-1 overflow-hidden transition-colors duration-500 bg-[#c0c0c0] text-black ${isWindowed ? '' : 'pt-[60px] lg:pt-[80px]'}`}>
+
+      <div className="hidden md:flex w-72 flex-col h-full bg-[#c0c0c0] sunken-panel m-2">
+        <div className="p-4 sticky top-0 z-10 bg-[#c0c0c0] border-b border-gray-400">
+          <h2 className="text-lg font-extrabold tracking-widest uppercase">FILTER</h2>
         </div>
 
         <div className="flex-1 overflow-y-auto no-scrollbar p-4">
@@ -176,27 +151,21 @@ function Gallery() {
             traits={traits}
             selectedTraits={selectedTraits}
             toggleTrait={toggleTrait}
-            searchId={searchId}          // ✅ PASS
-            setSearchId={setSearchId}    // ✅ PASS
           />
         </div>
       </div>
 
-      {/* GALLERY */}
       <div
         ref={galleryRef}
-        className="flex-1 overflow-y-auto no-scrollbar p-6"
+        className="flex-1 overflow-y-auto no-scrollbar p-2 sunken-panel m-2 ml-0 bg-white"
       >
-        <div className="max-w-[1400px] mx-auto">
+        <div className="mx-auto pt-4">
 
-          <div className="mb-6">
-            <h1 className="text-xl font-bold">BADFROGS</h1>
-            <p className="text-sm text-gray-500">
-              {baseSupply} items
-            </p>
+          <div className="border-b border-gray-400 pb-2 mb-4">
+            <p className="text-sm">{filtered.length} object(s)</p>
           </div>
 
-          {filtered.length === 0 && nfts.length > 0 ? (
+          {filtered.length === 0 ? (
             <div className="flex items-center justify-center h-[300px] text-center">
               <div>
                 <p className="text-lg font-semibold mb-2">
@@ -208,80 +177,46 @@ function Gallery() {
               </div>
             </div>
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6">
-
-              {filtered.map((nft) => (
+            <div className="flex flex-wrap gap-4">
+              {displayedNfts.map((nft, index) => (
                 <div
+                  ref={index === displayedNfts.length - 1 ? lastElementRef : null}
                   key={nft.identifier}
-                  onClick={() => setSelectedNFT(nft)}
-                  className="bg-[#eeeeee] rounded-2xl overflow-hidden cursor-pointer hover:scale-[1.03] transition"
+                  onClick={() => openWindow(`nft_${nft.identifier}`, `#${nft.identifier}.jpg`, <NftViewer nft={nft} isEditable={false} openWindow={openWindow} />)}
+                  className="flex flex-col items-center justify-start w-[150px] p-2 cursor-pointer group"
                 >
-                  <img
-                    src={nft.image_url}
-                    className="w-full aspect-square object-cover"
-                  />
-
-                  <div className="p-2 text-center">
-                    <p className="text-xs text-gray-500">BADFROGS</p>
-                    <p className="text-sm font-medium">
-                      NO. {nft.identifier}
-                    </p>
+                  <div className="w-32 h-32 mb-1 border-2 border-gray-500 border-r-white border-b-white bg-white flex items-center justify-center p-1 pointer-events-none drop-shadow-md">
+                    <img src={nft.image_url} className="w-full h-full object-cover" />
                   </div>
+                  <div className="text-xs text-center border-transparent border border-dotted px-1 group-active:bg-[#000080] group-active:text-white group-active:border-white w-full truncate">
+                    #{nft.identifier}.jpg
+                  </div>
+                  {(nft._owner || (nft.owners && nft.owners[0])) && (() => {
+                    const addr = nft._owner || nft.owners[0].address;
+                    const dName = resolveDisplayName(addr).name;
+                    return (
+                      <span 
+                        className="text-[9px] text-[#000080] uppercase font-bold truncate w-full px-1 text-center hover:underline z-10 block cursor-pointer"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openWindow(`profile_${addr}`, `${dName} - Profile`, <Profile account={addr} isWindowed={true} openWindow={openWindow} />);
+                        }}
+                        title={`Holder: ${addr}`}
+                      >
+                        {dName}
+                      </span>
+                    );
+                  })()}
                 </div>
               ))}
-
             </div>
           )}
 
         </div>
-
-        <div ref={loaderRef} className="h-10"></div>
       </div>
 
-      {/* MODAL */}
-      {selectedNFT && (
-        <div
-          onClick={() => setSelectedNFT(null)}
-          className="fixed inset-0 bg-black/70 flex items-center justify-center z-50"
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="bg-[#eaeaea] rounded-2xl max-w-5xl w-full flex overflow-hidden"
-          >
-            <div className="w-1/2 bg-gray-300 flex items-center justify-center">
-              <img src={selectedNFT.image_url} className="max-h-[500px]" />
-            </div>
-
-            <div className="w-1/2 p-6 flex flex-col">
-              <h2 className="text-2xl font-bold mb-6">
-                BADFROG #{selectedNFT.identifier}
-              </h2>
-
-              <div className="grid grid-cols-2 gap-3 mb-6">
-                {selectedNFT.traits?.map((t, i) => (
-                  <div key={i} className="bg-white/70 border rounded-lg p-3">
-                    <p className="text-xs text-gray-500 uppercase">
-                      {t.trait_type}
-                    </p>
-                    <p className="font-semibold text-sm">{t.value}</p>
-                  </div>
-                ))}
-              </div>
-
-              <button
-                onClick={() => openOnOpenSea(selectedNFT)}
-                className="mt-auto bg-black text-white py-3 rounded-xl font-semibold hover:opacity-90 transition"
-              >
-                View on OpenSea
-              </button>
-
-            </div>
-
-          </div>
-        </div>
-      )}
-
     </motion.div>
+   </div>
   );
 }
 

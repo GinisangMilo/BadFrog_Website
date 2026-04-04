@@ -1,3 +1,8 @@
+@import '@fontsource/raleway/400.css';
+@import '@fontsource/raleway/700.css';
+@import '@fontsource/raleway/900.css';
+@import '@fontsource/inter/400.css';
+@import '@fontsource/inter/700.css';
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -11,4 +16,11 @@ body {
 html, body {
   height: 100%;
   overflow: hidden;
+}
+
+.badfrogs-font {
+  font-family: 'Raleway', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-weight: 900;
+  letter-spacing: 0.025em;
+  text-transform: uppercase;
 }

@@ -9,29 +9,30 @@ function FilterPanel({ traits, selectedTraits, toggleTrait }) {
       [type]: !prev[type],
     }));
   };
-
   return (
-    <div className="h-full flex flex-col">
+    <div className="h-full flex flex-col text-black">
+      
+
       {/* SCROLL AREA */}
       <div className="flex-1 overflow-y-auto no-scrollbar pr-2 space-y-4">
 
         {Object.keys(traits)
           .sort()
           .map((type) => (
-            <div key={type} className="border-b border-gray-200 pb-3">
+            <div key={type} className="border-b pb-3 border-gray-200">
 
               <div
                 onClick={() => toggleSection(type)}
                 className="flex justify-between items-center cursor-pointer"
               >
-                <span className="uppercase text-xs font-semibold text-gray-600">
+                <span className="uppercase text-xs font-bold tracking-widest text-gray-600">
                   {type}
                 </span>
                 <span>{open[type] ? "−" : "+"}</span>
               </div>
 
               {open[type] && (
-                <div className="mt-2 flex flex-wrap gap-2">
+                <div className="mt-3 flex flex-wrap gap-2">
                   {traits[type]?.slice().sort().map((val) => {
                     const active = selectedTraits[type]?.has(val);
 
@@ -39,12 +40,11 @@ function FilterPanel({ traits, selectedTraits, toggleTrait }) {
                       <div
                         key={`${type}-${val}`}
                         onClick={() => toggleTrait(type, val)}
-                        className={`text-xs px-2 py-1 rounded-md cursor-pointer transition
-                          ${
-                            active
-                              ? "bg-black text-white"
-                              : "bg-gray-100 hover:bg-black hover:text-white"
-                          }`}
+                        className={`text-xs px-2.5 py-1.5 rounded-md cursor-pointer transition-all duration-300 font-semibold border ${
+                          active
+                            ? "bg-black text-white border-black"
+                            : "bg-gray-50 text-gray-600 border-gray-200 hover:bg-black hover:text-white hover:border-black"
+                        }`}
                       >
                         {val}
                       </div>

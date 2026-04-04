@@ -10,13 +10,20 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@fontsource/inter": "^5.2.8",
+    "@fontsource/raleway": "^5.2.8",
+    "@react95/icons": "^2.4.0",
+    "98.css": "^0.1.21",
     "alchemy-sdk": "^3.6.5",
     "axios": "^1.14.0",
     "ethers": "^6.16.0",
     "framer-motion": "^12.38.0",
+    "moralis": "^2.27.2",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
+    "react-draggable": "^4.5.0",
     "react-parallax-tilt": "^1.7.321",
+    "react-rnd": "^10.5.3",
     "react-router-dom": "^7.13.2"
   },
   "devDependencies": {
