@@ -4,6 +4,8 @@ import { ethers } from "ethers";
 import NftViewer from '../components/NftViewer';
 import { useBootData } from '../context/BootDataContext';
 import { getEthProvider } from '../utils/rpc';
+import { fetchProfile, saveDisplayName, saveProfilePfp } from '../utils/profileService';
+import { resolvePfp } from '../utils/displayName';
 
 const CONTRACT_ADDRESS = "0x13e2a004ea4c77412c9806daadafd09de65645a3";
 
@@ -21,6 +23,8 @@ function Profile({ account: propAccount, isWindowed, openWindow }) {
   const [customName, setCustomName] = useState("");
   const [editingName, setEditingName] = useState(false);
   const [nameSaved, setNameSaved] = useState(false);
+  const [nameError, setNameError] = useState("");
+  const [savingName, setSavingName] = useState(false);
   const [isSelf, setIsSelf] = useState(false);
 
   // Build a fast lookup map from globalNfts
@@ -96,15 +100,42 @@ function Profile({ account: propAccount, isWindowed, openWindow }) {
   useEffect(() => {
     if (account) {
       fetchNFTs(account);
-      const savedName = 
-        localStorage.getItem(`profile_name_${account.toLowerCase()}`) || 
-        localStorage.getItem(`profile_name_${account}`);
-      if (savedName) setCustomName(savedName);
-      
-      const savedPfp = 
-        localStorage.getItem(`profile_pfp_${account.toLowerCase()}`) || 
-        localStorage.getItem(`profile_pfp_${account}`);
-      if (savedPfp) setCustomPfp(savedPfp);
+
+      // Load profile from Supabase (shared), fallback to localStorage
+      // If localStorage has data but Supabase doesn't, auto-migrate it
+      fetchProfile(account).then(async (profile) => {
+        const localName =
+          localStorage.getItem(`profile_name_${account.toLowerCase()}`) ||
+          localStorage.getItem(`profile_name_${account}`) || '';
+        const localPfp =
+          localStorage.getItem(`profile_pfp_${account.toLowerCase()}`) ||
+          localStorage.getItem(`profile_pfp_${account}`) || '';
+
+        // Use Supabase data if it exists
+        if (profile?.name) {
+          setCustomName(profile.name);
+        } else if (localName) {
+          setCustomName(localName);
+          // Auto-migrate: push localStorage name to Supabase so others can see it
+          saveDisplayName(account, localName).then(r => {
+            if (r.success) console.log('Migrated name to Supabase:', localName);
+            else console.warn('Name migration failed:', r.error);
+          });
+        }
+
+        if (profile?.pfp) {
+          setCustomPfp(profile.pfp);
+        } else if (localPfp) {
+          setCustomPfp(localPfp);
+          // Auto-migrate: push localStorage PFP to Supabase so others can see it
+          saveProfilePfp(account, localPfp).then(r => {
+            if (r.success) console.log('Migrated PFP to Supabase:', localPfp);
+            else console.warn('PFP migration failed:', r.error);
+          });
+        }
+      });
+
+      // Check if this is the current user's own profile
       if (window.ethereum) {
         window.ethereum.request({ method: 'eth_accounts' }).then(accounts => {
           if (accounts.length > 0 && accounts[0].toLowerCase() === account.toLowerCase()) {
@@ -118,20 +149,36 @@ function Profile({ account: propAccount, isWindowed, openWindow }) {
     }
   }, [account]);
 
-  const shortenAddress = (address) => address ? `${address.slice(0,6)}...${address.slice(-4)}` : "";
-  const saveCustomName = () => {
-    if (customName.trim() && account) {
-      localStorage.setItem(`profile_name_${account.toLowerCase()}`, customName.trim());
+  const shortenAddress = (address) => address ? `${address.slice(0, 6)}...${address.slice(-4)}` : "";
+
+  const saveCustomName = async () => {
+    if (!customName.trim() || !account) return;
+    setSavingName(true);
+    setNameError("");
+
+    const result = await saveDisplayName(account, customName);
+
+    if (result.success) {
       setEditingName(false);
       setNameSaved(true);
+      setNameError("");
       setTimeout(() => setNameSaved(false), 2000);
+    } else {
+      setNameError(result.error || "Failed to save name");
+    }
+    setSavingName(false);
+  };
+
+  const handleSavePfp = async (url) => {
+    const result = await saveProfilePfp(account, url);
+    if (result.success) {
+      setCustomPfp(url);
+      setEditingPfp(false);
+    } else {
+      alert("Failed to save PFP: " + (result.error || "Unknown error"));
     }
   };
-  const saveCustomPfp = (url) => {
-    localStorage.setItem(`profile_pfp_${account.toLowerCase()}`, url);
-    setCustomPfp(url);
-    setEditingPfp(false);
-  };
+
   const copyToClipboard = (text) => navigator.clipboard.writeText(text);
 
   if (loading) return (
@@ -150,7 +197,11 @@ function Profile({ account: propAccount, isWindowed, openWindow }) {
         {/* DASHBOARD BLOCK */}
         <div className="p-4 flex flex-col md:flex-row items-center gap-6 bg-white border-[2px]" style={{ boxShadow: 'inset -1px -1px #fff, inset 1px 1px #0a0a0a, inset -2px -2px #dfdfdf, inset 2px 2px grey' }}>
           <div className="flex flex-col items-center">
-            <div className="w-32 h-32 flex items-center justify-center bg-white border-[2px] relative cursor-pointer group" style={{ boxShadow: 'inset -2px -2px #dfdfdf, inset 2px 2px #0a0a0a, inset -1px -1px grey, inset 1px 1px #fff' }} onClick={() => setEditingPfp(!editingPfp)}>
+            <div
+              className={`w-32 h-32 flex items-center justify-center bg-white border-[2px] relative ${isSelf ? 'cursor-pointer group' : ''}`}
+              style={{ boxShadow: 'inset -2px -2px #dfdfdf, inset 2px 2px #0a0a0a, inset -1px -1px grey, inset 1px 1px #fff' }}
+              onClick={() => isSelf && setEditingPfp(!editingPfp)}
+            >
               {customPfp || (frogs.length > 0) ? (
                 <img src={customPfp || frogs[0]?.image_url} alt="Profile Avatar" className="w-full h-full object-cover p-1" />
               ) : (
@@ -166,10 +217,37 @@ function Profile({ account: propAccount, isWindowed, openWindow }) {
           
           <div className="flex-1 space-y-4">
             <div className="flex items-center gap-4">
-              {editingName ? (
-                <div className="flex items-center gap-2">
-                  <input value={customName} onChange={(e) => setCustomName(e.target.value)} placeholder="Display name..." className="px-2 py-1 border-[2px]" style={{ boxShadow: 'inset -2px -2px #dfdfdf, inset 2px 2px #0a0a0a, inset -1px -1px grey, inset 1px 1px #fff' }} autoFocus />
-                  <button onClick={saveCustomName} disabled={!customName.trim()} className="px-4 py-1 text-xs border-[2px] active:pt-1 active:-mb-1">Save</button>
+              {editingName && isSelf ? (
+                <div className="flex flex-col gap-1">
+                  <div className="flex items-center gap-2">
+                    <input
+                      value={customName}
+                      onChange={(e) => { setCustomName(e.target.value); setNameError(""); }}
+                      placeholder="Display name..."
+                      className="px-2 py-1 border-[2px]"
+                      style={{ boxShadow: 'inset -2px -2px #dfdfdf, inset 2px 2px #0a0a0a, inset -1px -1px grey, inset 1px 1px #fff' }}
+                      autoFocus
+                      onKeyDown={(e) => e.key === 'Enter' && saveCustomName()}
+                    />
+                    <button
+                      onClick={saveCustomName}
+                      disabled={!customName.trim() || savingName}
+                      className="px-4 py-1 text-xs border-[2px] active:pt-1 active:-mb-1 disabled:opacity-50"
+                    >
+                      {savingName ? 'Saving...' : 'Save'}
+                    </button>
+                    <button
+                      onClick={() => { setEditingName(false); setNameError(""); }}
+                      className="px-3 py-1 text-xs border-[2px] active:pt-1 active:-mb-1"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                  {nameError && (
+                    <div className="text-xs text-red-600 font-bold px-1">
+                      ⚠️ {nameError}
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="flex items-center gap-4">
@@ -194,12 +272,12 @@ function Profile({ account: propAccount, isWindowed, openWindow }) {
           </div>
         </div>
 
-        {editingPfp && (
+        {editingPfp && isSelf && (
            <div className="p-4 bg-[#c0c0c0] border-[2px]" style={{ boxShadow: 'inset -1px -1px #0a0a0a, inset 1px 1px #fff, inset -2px -2px grey, inset 2px 2px #dfdfdf' }}>
              <p className="font-bold mb-2">Select a Frog to use as your Profile Picture:</p>
              <div className="flex gap-2 overflow-x-auto p-2">
                {frogs.map((nft) => (
-                 <img key={nft.identifier} src={nft.image_url} onClick={() => saveCustomPfp(nft.image_url)} className="w-16 h-16 cursor-pointer border-2 hover:border-black" />
+                 <img key={nft.identifier} src={nft.image_url} onClick={() => handleSavePfp(nft.image_url)} className="w-16 h-16 cursor-pointer border-2 hover:border-black" />
                ))}
              </div>
            </div>

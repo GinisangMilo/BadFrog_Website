@@ -1,0 +1,31 @@
+STDOUT:
+[36mvite v8.0.3 [32mbuilding client environment for production...[36m[39m
+[2Ktransforming...✓ 1630 modules transformed.
+
+STDERR:
+[31m✗[39m Build failed in 1.07s
+[31merror during build:
+[31mBuild failed with 1 error:
+
+[plugin vite:css-post]
+Error: Cannot find package 'esbuild' imported from C:\Users\lemue\OneDrive\Desktop\badfrogs-website\node_modules\vite\dist\node\chunks\node.js
+Error [PLUGIN_ERROR]: Cannot find package 'esbuild' imported from C:\Users\lemue\OneDrive\Desktop\badfrogs-website\node_modules\vite\dist\node\chunks\node.js
+    at Object.getPackageJSONURL (node:internal/modules/package_json_reader:316:9)
+    at packageResolve (node:internal/modules/esm/resolve:768:81)
+    at moduleResolve (node:internal/modules/esm/resolve:858:18)
+    at defaultResolve (node:internal/modules/esm/resolve:990:11)
+    at #cachedDefaultResolve (node:internal/modules/esm/loader:718:20)
+    at #resolveAndMaybeBlockOnLoaderThread (node:internal/modules/esm/loader:735:38)
+    at ModuleLoader.resolveSync (node:internal/modules/esm/loader:764:52)
+    at #resolve (node:internal/modules/esm/loader:700:17)
+    at ModuleLoader.getOrCreateModuleJob (node:internal/modules/esm/loader:620:35)
+    at onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:649:32)[31m
+    at aggregateBindingErrorsIntoJsError (file:///C:/Users/lemue/OneDrive/Desktop/badfrogs-website/node_modules/vite/node_modules/rolldown/dist/shared/error-BLhcSyeg.mjs:48:18)
+    at unwrapBindingResult (file:///C:/Users/lemue/OneDrive/Desktop/badfrogs-website/node_modules/vite/node_modules/rolldown/dist/shared/error-BLhcSyeg.mjs:18:128)
+    at #build (file:///C:/Users/lemue/OneDrive/Desktop/badfrogs-website/node_modules/vite/node_modules/rolldown/dist/shared/rolldown-build-CPrIX9V6.mjs:3313:34)
+    at async buildEnvironment (file:///C:/Users/lemue/OneDrive/Desktop/badfrogs-website/node_modules/vite/dist/node/chunks/node.js:32849:64)
+    at async Object.build (file:///C:/Users/lemue/OneDrive/Desktop/badfrogs-website/node_modules/vite/dist/node/chunks/node.js:33271:19)
+    at async Object.buildApp (file:///C:/Users/lemue/OneDrive/Desktop/badfrogs-website/node_modules/vite/dist/node/chunks/node.js:33268:153)
+    at async CAC.<anonymous> (file:///C:/Users/lemue/OneDrive/Desktop/badfrogs-website/node_modules/vite/dist/node/cli.js:778:3) {
+  errors: [Getter/Setter]
+}[39m

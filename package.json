@@ -13,6 +13,7 @@
     "@fontsource/inter": "^5.2.8",
     "@fontsource/raleway": "^5.2.8",
     "@react95/icons": "^2.4.0",
+    "@supabase/supabase-js": "^2.101.1",
     "98.css": "^0.1.21",
     "alchemy-sdk": "^3.6.5",
     "axios": "^1.14.0",

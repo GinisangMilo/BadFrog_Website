@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
+import Draggable from 'react-draggable';
 import DesktopIcon from './DesktopIcon';
 import WindowFrame from './WindowFrame';
 import Gallery from '../pages/Gallery';
@@ -6,16 +7,18 @@ import Profile from '../pages/Profile';
 import MyFrogs from '../pages/MyFrogs';
 import BurnFolder from '../pages/BurnFolder';
 import NftTransfer from './NftTransfer';
+
 import Taskbar from './Taskbar';
 import { ethers } from "ethers";
+import { useBootData } from '../context/BootDataContext';
 import { Computer3, Folder, RecycleEmpty, RecycleFull, FolderExe, Ie, Network3 } from '@react95/icons';
 
 const CONTRACT_ADDRESS = "0x13e2a004ea4c77412c9806daadafd09de65645a3";
 const BURN_ADDRESS = "0x000000000000000000000000000000000000dEaD";
 
 export default function Desktop({ account, frogsHeld, connectWallet, disconnectWallet, walletModal, setWalletModal, globalNfts }) {
-  // Store currently open windows
   const [windows, setWindows] = useState([]);
+  const [minimizedWindows, setMinimizedWindows] = useState(new Set());
   const [burnTarget, setBurnTarget] = useState(null);
   const [burnQueue, setBurnQueue] = useState([]);
   const [contextMenu, setContextMenu] = useState(null);
@@ -27,8 +30,13 @@ export default function Desktop({ account, frogsHeld, connectWallet, disconnectW
     return () => window.removeEventListener('click', closeMenu);
   }, []);
 
-  // Bring a window to front
   const focusWindow = (id) => {
+    // Un-minimize if minimized
+    setMinimizedWindows(prev => {
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
     setWindows(prev => {
       const idx = prev.findIndex(w => w.id === id);
       if (idx === -1) return prev;
@@ -47,6 +55,15 @@ export default function Desktop({ account, frogsHeld, connectWallet, disconnectW
 
   const closeWindow = (id) => {
     setWindows(prev => prev.filter(w => w.id !== id));
+    setMinimizedWindows(prev => {
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+  };
+
+  const minimizeWindow = (id) => {
+    setMinimizedWindows(prev => new Set(prev).add(id));
   };
 
   const openGallery = () => {
@@ -58,16 +75,18 @@ export default function Desktop({ account, frogsHeld, connectWallet, disconnectW
   };
 
   const openMyFrogs = () => {
-    openWindow('myfrogs', 'My Bad Frogs', null); // content rendered live below
+    openWindow('myfrogs', 'My Bad Frogs', null);
   };
 
   const openBurn = () => {
-    openWindow('burn', 'Burn Bin', null); // content rendered live below
+    openWindow('burn', 'Burn Bin', null);
   };
 
   const openTransfer = () => {
-    openWindow('transfer', 'NFT Transfer', null); // content rendered live below
+    openWindow('transfer', 'NFT Transfer', null);
   };
+
+
 
   const removeFromBurnQueue = (identifier) => {
     setBurnQueue(prev => prev.filter(item => item.identifier !== identifier));
@@ -125,64 +144,96 @@ export default function Desktop({ account, frogsHeld, connectWallet, disconnectW
     ), { defaultWidth: 400, defaultHeight: 200 });
   };
 
+  // Desktop icon definitions with grid positions
+  const desktopIcons = [
+    {
+      id: 'mycomputer',
+      icon: <Computer3 variant="32x32_4" />,
+      label: 'My Computer',
+      onClick: openProfile,
+      defaultPos: { x: 20, y: 20 },
+      alwaysShow: true,
+    },
+    {
+      id: 'gallery',
+      icon: <Folder variant="32x32_4" />,
+      label: 'Gallery',
+      onClick: openGallery,
+      defaultPos: { x: 20, y: 110 },
+      alwaysShow: true,
+    },
+    {
+      id: 'burnbin',
+      icon: burnQueue.length > 0 ? <RecycleFull variant="32x32_4" /> : <RecycleEmpty variant="32x32_4" />,
+      label: 'Burn Bin',
+      onClick: openBurn,
+      defaultPos: { x: 20, y: 200 },
+      alwaysShow: true,
+      onDrop: handleRecycleDrop,
+      onContextMenu: (e) => {
+        e.preventDefault();
+        setContextMenu({ x: e.clientX, y: e.clientY });
+      },
+    },
+    {
+      id: 'explorer',
+      icon: <Ie variant="16x16_8" />,
+      label: 'Bad Frogs Explorer',
+      onClick: () => window.open('https://opensea.io/collection/badfrogs', '_blank'),
+      defaultPos: { x: 20, y: 290 },
+      alwaysShow: true,
+    },
+    {
+      id: 'myfrogs',
+      icon: <FolderExe variant="32x32_4" />,
+      label: 'My Bad Frogs',
+      onClick: openMyFrogs,
+      defaultPos: { x: 20, y: 380 },
+      alwaysShow: false,
+      requiresAccount: true,
+    },
+    {
+      id: 'transfer',
+      icon: <Network3 variant="32x32_4" />,
+      label: 'NFT Transfer',
+      onClick: openTransfer,
+      defaultPos: { x: 20, y: 470 },
+      alwaysShow: false,
+      requiresAccount: true,
+    },
+  ];
+
   return (
     <div
       className="fixed inset-0 overflow-hidden"
       style={{ backgroundColor: '#008080' }}
     >
-      <div className="absolute inset-0 p-4 flex flex-col gap-6 items-start z-0 select-none">
-        <DesktopIcon
-          icon={<Computer3 variant="32x32_4" />}
-          label="My Computer"
-          onClick={openProfile}
-        />
-        <DesktopIcon
-          icon={<Folder variant="32x32_4" />}
-          label="Gallery"
-          onClick={openGallery}
-        />
-        <div
-          onDragOver={(e) => { e.preventDefault(); e.currentTarget.classList.add('brightness-50') }}
-          onDragLeave={(e) => { e.currentTarget.classList.remove('brightness-50') }}
-          onDrop={handleRecycleDrop}
-          onContextMenu={(e) => {
-            e.preventDefault();
-            setContextMenu({ x: e.clientX, y: e.clientY });
-          }}
-        >
-          <DesktopIcon
-            icon={burnQueue.length > 0 ? <RecycleFull variant="32x32_4" /> : <RecycleEmpty variant="32x32_4" />}
-            label="Burn Bin"
-            onClick={openBurn}
-          />
-        </div>
-        <DesktopIcon
-          icon={<Ie variant="16x16_8" />}
-          label="Bad Frogs Explorer"
-          onClick={() => window.open('https://opensea.io/collection/badfrogs', '_blank')}
-        />
-        {account && (
-          <DesktopIcon
-            icon={<FolderExe variant="32x32_4" />}
-            label="My Bad Frogs"
-            onClick={openMyFrogs}
-          />
-        )}
-        {account && (
-          <DesktopIcon
-            icon={<Network3 variant="32x32_4" />}
-            label="NFT Transfer"
-            onClick={openTransfer}
-          />
-        )}
+      {/* Desktop icons area */}
+      <div className="absolute inset-0 z-0 select-none" style={{ paddingBottom: '30px' }}>
+        {desktopIcons
+          .filter(icon => icon.alwaysShow || (icon.requiresAccount && account))
+          .map(icon => (
+            <DraggableDesktopIcon
+              key={icon.id}
+              icon={icon.icon}
+              label={icon.label}
+              onClick={icon.onClick}
+              defaultPos={icon.defaultPos}
+              onDrop={icon.onDrop}
+              onContextMenu={icon.onContextMenu}
+            />
+          ))}
       </div>
 
+      {/* Windows */}
       {windows.map((win, idx) => (
         <WindowFrame
           key={win.id}
           title={win.title}
           onClose={() => closeWindow(win.id)}
           onFocus={() => focusWindow(win.id)}
+          onMinimize={() => minimizeWindow(win.id)}
+          isMinimized={minimizedWindows.has(win.id)}
           zIndex={10 + idx}
           {...(win.windowProps || {})}
         >
@@ -211,6 +262,7 @@ export default function Desktop({ account, frogsHeld, connectWallet, disconnectW
         </WindowFrame>
       ))}
 
+      {/* Context menu */}
       {contextMenu && (
         <div
           className="absolute bg-[#c0c0c0] border-2 border-white border-r-gray-500 border-b-gray-500 shadow-md p-1 min-w-[150px] z-[100]"
@@ -234,7 +286,55 @@ export default function Desktop({ account, frogsHeld, connectWallet, disconnectW
         openWindow={openWindow}
         windows={windows}
         focusWindow={focusWindow}
+        minimizedWindows={minimizedWindows}
       />
     </div>
+  );
+}
+
+/* Draggable wrapper for desktop icons with click-vs-drag detection */
+function DraggableDesktopIcon({ icon, label, onClick, defaultPos, onDrop, onContextMenu }) {
+  const [dragged, setDragged] = useState(false);
+  const nodeRef = React.useRef(null);
+
+  const handleStart = () => setDragged(false);
+  const handleDrag = () => setDragged(true);
+  const handleStop = () => {
+    // Small delay so onClick can check dragged state
+    setTimeout(() => setDragged(false), 50);
+  };
+
+  const handleClick = (e) => {
+    if (dragged) {
+      e.stopPropagation();
+      return;
+    }
+    onClick();
+  };
+
+  return (
+    <Draggable
+      nodeRef={nodeRef}
+      defaultPosition={defaultPos}
+      bounds="parent"
+      onStart={handleStart}
+      onDrag={handleDrag}
+      onStop={handleStop}
+    >
+      <div
+        ref={nodeRef}
+        className="absolute z-[5]"
+        onDrop={onDrop}
+        onDragOver={onDrop ? (e) => { e.preventDefault(); e.currentTarget.classList.add('brightness-50'); } : undefined}
+        onDragLeave={onDrop ? (e) => { e.currentTarget.classList.remove('brightness-50'); } : undefined}
+        onContextMenu={onContextMenu}
+      >
+        <DesktopIcon
+          icon={icon}
+          label={label}
+          onClick={handleClick}
+        />
+      </div>
+    </Draggable>
   );
 }

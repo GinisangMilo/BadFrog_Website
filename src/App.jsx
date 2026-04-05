@@ -5,6 +5,7 @@ import BootScreen from "./components/BootScreen";
 import { BootDataProvider } from "./context/BootDataContext";
 import { ethers } from "ethers";
 import { getEthProvider } from "./utils/rpc";
+import { loadAllProfiles } from "./utils/profileService";
 
 const CONTRACT_ADDRESS = "0x13e2a004ea4c77412c9806daadafd09de65645a3";
 
@@ -77,9 +78,11 @@ function App() {
   return (
     <>
       {!booted ? (
-        <BootScreen onBootComplete={(nfts, loreMap) => {
+        <BootScreen onBootComplete={async (nfts, loreMap) => {
           setGlobalNfts(nfts);
           setGlobalLoreMap(loreMap || {});
+          // Load all shared profiles from Supabase into cache
+          await loadAllProfiles().catch(e => console.warn('Profile load failed:', e));
           setBooted(true);
         }} />
       ) : (

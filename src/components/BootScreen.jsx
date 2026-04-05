@@ -7,23 +7,13 @@ import { LORE_ABI } from "../contracts/DeployConfig";
 const LORE_CONTRACT_ADDRESS = "0xdfbd14ebb6743abc7a87b77d3e55e29bd5a48289";
 const TOTAL_NFTS = 4444;
 
-const PHASE_LABELS = {
-  COLLECTION: "Loading NFT collection data",
-  OWNERSHIP: "Mapping NFT ownership",
-  LORE: "Loading lore registry from Base",
-  DONE: "Boot complete",
-};
-
 export default function BootScreen({ onBootComplete }) {
-  const [phase, setPhase] = useState("COLLECTION");
   const [progress, setProgress] = useState(0);
-  const [loadedCount, setLoadedCount] = useState(0);
-  const [totalForPhase, setTotalForPhase] = useState(TOTAL_NFTS);
   const [error, setError] = useState(null);
   const [logs, setLogs] = useState(["Initializing Bad Frogs OS v1744..."]);
   const fetchedRef = useRef(false);
 
-  const addLog = (msg) => setLogs(prev => [...prev.slice(-10), msg]);
+  const addLog = (msg) => setLogs(prev => [...prev.slice(-8), msg]);
 
   useEffect(() => {
     if (fetchedRef.current) return;
@@ -34,11 +24,10 @@ export default function BootScreen({ onBootComplete }) {
   const runBootSequence = async () => {
     try {
       // ═══════════════════════════════════════════
-      // PHASE 1: Fetch all NFTs from OpenSea
+      // Boot Phase 1: Load collection data
       // ═══════════════════════════════════════════
       addLog("BIOS: Memory check... OK");
-      addLog("PHASE 1/3: Mapping collection via OpenSea...");
-      setPhase("COLLECTION");
+      addLog("Loading system data...");
 
       let completeCollection = [];
       let cursor = null;
@@ -48,8 +37,7 @@ export default function BootScreen({ onBootComplete }) {
         const res = await getNFTs(cursor, 200);
         completeCollection = [...completeCollection, ...res.nfts];
         const currentCount = completeCollection.length;
-        setLoadedCount(currentCount);
-        setProgress(Math.min(100, Math.floor((currentCount / TOTAL_NFTS) * 100)));
+        setProgress(Math.min(60, Math.floor((currentCount / TOTAL_NFTS) * 60)));
 
         if (res.nextCursor && currentCount < TOTAL_NFTS) {
           cursor = res.nextCursor;
@@ -58,21 +46,16 @@ export default function BootScreen({ onBootComplete }) {
         }
       }
 
-      addLog(`Collection mapped: ${completeCollection.length} NFTs cached.`);
+      addLog(`System data loaded: ${completeCollection.length} entries cached.`);
 
       // ═══════════════════════════════════════════
-      // PHASE 2: Extract ownership from OpenSea data
-      // (No extra RPC calls needed — OpenSea already provides owners)
+      // Boot Phase 2: Map ownership
       // ═══════════════════════════════════════════
-      addLog("PHASE 2/3: Mapping ownership from collection data...");
-      setPhase("OWNERSHIP");
-      setLoadedCount(0);
-      setTotalForPhase(completeCollection.length);
-      setProgress(0);
+      addLog("Verifying system integrity...");
+      setProgress(65);
 
       let ownersFound = 0;
-      completeCollection.forEach((nft, i) => {
-        // OpenSea returns owners array on each NFT
+      completeCollection.forEach((nft) => {
         if (nft.owners && nft.owners[0] && nft.owners[0].address) {
           nft._owner = nft.owners[0].address;
           ownersFound++;
@@ -81,22 +64,15 @@ export default function BootScreen({ onBootComplete }) {
         }
       });
 
-      setLoadedCount(completeCollection.length);
-      setProgress(100);
-      addLog(`Ownership: ${ownersFound} holders mapped instantly.`);
+      setProgress(70);
+      addLog(`Integrity check passed.`);
 
       // ═══════════════════════════════════════════
-      // PHASE 3: Batch getLore via Multicall3 on Base
+      // Boot Phase 3: Load lore from Base
       // ═══════════════════════════════════════════
-      // PHASE 3: Loading lore from Base chain
-      // ═══════════════════════════════════════════
-      addLog("PHASE 3/3: Synchronizing lore updates...");
-      setPhase("LORE");
-      setLoadedCount(0);
+      addLog("Synchronizing extensions...");
 
       const nftsWithOwners = completeCollection.filter(nft => nft._owner);
-      setTotalForPhase(nftsWithOwners.length);
-      setProgress(0);
 
       if (LORE_CONTRACT_ADDRESS !== "TBD") {
         try {
@@ -104,32 +80,33 @@ export default function BootScreen({ onBootComplete }) {
           const loreContract = new ethers.Contract(LORE_CONTRACT_ADDRESS, LORE_ABI, baseProvider);
           const LORE_DEPLOY_BLOCK = 44250000;
           const currentBlock = await baseProvider.getBlockNumber();
-          const CHUNK = 1000; // Base RPCs are sensitive; 1000 blocks is the safe limit for queryFilter
-          
-          addLog("Scanning Base chain for lore history...");
+          const CHUNK = 1000;
+
           let allEvents = [];
+          const totalChunks = Math.ceil((currentBlock - LORE_DEPLOY_BLOCK) / (CHUNK + 1));
+          let chunksDone = 0;
+
           for (let from = LORE_DEPLOY_BLOCK; from <= currentBlock; from += CHUNK + 1) {
             const to = Math.min(from + CHUNK, currentBlock);
             try {
               const events = await loreContract.queryFilter(loreContract.filters.LoreUpdated(), from, to);
               allEvents.push(...events);
             } catch (rpcErr) {
-              addLog(`WARN: Range ${from}-${to} failed, retrying smaller...`);
-              // Emergency fallback for dense ranges
               const mid = from + Math.floor(CHUNK / 2);
               const e1 = await loreContract.queryFilter(loreContract.filters.LoreUpdated(), from, mid);
               const e2 = await loreContract.queryFilter(loreContract.filters.LoreUpdated(), mid + 1, to);
               allEvents.push(...e1, ...e2);
             }
+            chunksDone++;
+            setProgress(70 + Math.floor((chunksDone / totalChunks) * 25));
           }
 
-          // Build loreMap: tokenId -> Array of { writer, lore, blockNumber }
           const loreMap = {};
           for (const event of allEvents) {
             const tokenId = event.args[0].toString();
             const writer = event.args[1];
             const loreText = event.args[2];
-            
+
             if (!loreMap[tokenId]) loreMap[tokenId] = [];
             loreMap[tokenId].push({
               writer,
@@ -138,9 +115,8 @@ export default function BootScreen({ onBootComplete }) {
             });
           }
 
-          // Get unique block numbers to fetch timestamps
           const uniqueBlocks = [...new Set(allEvents.map(e => e.blockNumber))];
-          addLog(`Syncing timestamps for ${uniqueBlocks.length} blocks...`);
+          addLog(`Syncing timestamps...`);
           const blockTimestamps = {};
           for (const bn of uniqueBlocks) {
             try {
@@ -151,7 +127,6 @@ export default function BootScreen({ onBootComplete }) {
             }
           }
 
-          // Enrich loreMap with timestamps
           Object.keys(loreMap).forEach(tid => {
             loreMap[tid] = loreMap[tid].map(entry => ({
               ...entry,
@@ -159,23 +134,28 @@ export default function BootScreen({ onBootComplete }) {
             })).sort((a, b) => a.timestamp - b.timestamp);
           });
 
-          addLog(`Lore history: ${allEvents.length} updates across ${Object.keys(loreMap).length} frogs.`);
-          
-          // Finish boot
+          addLog(`Extensions synchronized.`);
+          setProgress(98);
+
           completeCollection.forEach(nft => {
             nft._loreHistory = loreMap[nft.identifier] || [];
             if (nft._owner === undefined) nft._owner = null;
           });
-          
+
+          addLog("Boot complete. Welcome to Bad Frogs OS.");
+          setProgress(100);
+
+          // Small delay so user sees 100%
+          await new Promise(r => setTimeout(r, 400));
           onBootComplete(completeCollection, loreMap);
           return;
 
         } catch (err) {
-          addLog("WARNING: Lore history sync failed. Features will fall back to on-demand.");
+          addLog("WARNING: Extension sync failed. Some features may be limited.");
           console.warn("Lore sync failed:", err);
         }
       } else {
-        addLog("Lore registry: Skipped (TBD).");
+        addLog("Extensions: Skipped.");
       }
 
       // Default fallback
@@ -183,6 +163,10 @@ export default function BootScreen({ onBootComplete }) {
         if (nft._owner === undefined) nft._owner = null;
         nft._loreHistory = [];
       });
+
+      addLog("Boot complete. Welcome to Bad Frogs OS.");
+      setProgress(100);
+      await new Promise(r => setTimeout(r, 400));
       onBootComplete(completeCollection, {});
 
     } catch (err) {
@@ -192,25 +176,10 @@ export default function BootScreen({ onBootComplete }) {
     }
   };
 
-  const phaseIndex = { COLLECTION: 1, OWNERSHIP: 2, LORE: 3, DONE: 3 }[phase];
-
   return (
     <div className="fixed inset-0 bg-black text-[#c0c0c0] font-mono select-none z-[99999] p-8 flex flex-col">
       <div className="flex-1 flex flex-col justify-center items-center">
         <h1 className="text-5xl font-bold mb-4" style={{ textShadow: "4px 4px 0 #000080" }}>Bad Frogs 1744</h1>
-
-        {/* Phase indicators */}
-        <div className="flex gap-6 mt-4 mb-2 text-xs uppercase tracking-widest">
-          <span className={phase === "COLLECTION" ? "text-white font-bold" : phaseIndex > 1 ? "text-green-400" : "text-gray-600"}>
-            {phaseIndex > 1 ? "✓" : "►"} NFTs
-          </span>
-          <span className={phase === "OWNERSHIP" ? "text-white font-bold" : phaseIndex > 2 ? "text-green-400" : "text-gray-600"}>
-            {phaseIndex > 2 ? "✓" : phase === "OWNERSHIP" ? "►" : "○"} Holders
-          </span>
-          <span className={phase === "LORE" || phase === "DONE" ? "text-white font-bold" : "text-gray-600"}>
-            {phase === "DONE" ? "✓" : phase === "LORE" ? "►" : "○"} Lore
-          </span>
-        </div>
 
         {/* Progress bar */}
         <div className="w-96 border-[2px] border-white border-r-gray-500 border-b-gray-500 bg-[#c0c0c0] p-1 mt-4 shadow-lg">
@@ -225,13 +194,12 @@ export default function BootScreen({ onBootComplete }) {
         </div>
 
         <div className="mt-4 text-center">
-          <p className="mb-2 uppercase font-bold tracking-widest text-[#000080]">
-            {PHASE_LABELS[phase]}...
-          </p>
           {error ? (
             <p className="text-red-500">{error}</p>
           ) : (
-            <p>{loadedCount} / {totalForPhase}</p>
+            <p className="text-sm text-gray-400">
+              {progress < 100 ? 'Starting up...' : 'Ready.'}
+            </p>
           )}
         </div>
 
@@ -246,7 +214,7 @@ export default function BootScreen({ onBootComplete }) {
         </div>
       </div>
       <div className="text-xs text-gray-500">
-        (Beta)This is your website. OS Hijacked by Bad Frogs 2026.
+        (v1.1) Bad Frogs OS 2026. All rights reserved.
       </div>
     </div>
   );

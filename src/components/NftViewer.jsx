@@ -3,6 +3,7 @@ import { ethers } from 'ethers';
 import { LORE_ABI, BASE_CHAIN_ID } from '../contracts/DeployConfig';
 import Profile from '../pages/Profile';
 import { resolveDisplayName } from '../utils/displayName';
+import { fetchProfile } from '../utils/profileService';
 import { useBootData } from '../context/BootDataContext';
 
 const LORE_CONTRACT_ADDRESS = "0xdfbd14ebb6743abc7a87b77d3e55e29bd5a48289";
@@ -54,7 +55,11 @@ export default function NftViewer({ nft, isEditable, openWindow }) {
       if (!trueOwner) throw new Error("Could not determine owner.");
 
       setOwnerAddress(trueOwner);
-      setOwnerDisplayName(resolveDisplayName(trueOwner).name);
+      // Resolve owner name: try Supabase first, then cache/localStorage
+      const ownerProfile = await fetchProfile(trueOwner);
+      setOwnerDisplayName(
+        ownerProfile?.name || resolveDisplayName(trueOwner).name
+      );
 
       // ── Step 2: Live query Base chain for lore entries ──
       const loreEntries = [];
@@ -85,12 +90,14 @@ export default function NftViewer({ nft, isEditable, openWindow }) {
           } catch (e) { /* use fallback ts */ }
 
           const writer = evt.args[1];
+          // Resolve contributor name from Supabase
+          const writerProfile = await fetchProfile(writer);
           loreEntries.push({
             writer,
             lore: evt.args[2],
             blockNumber: evt.blockNumber,
             timestamp: ts,
-            displayName: resolveDisplayName(writer).name,
+            displayName: writerProfile?.name || resolveDisplayName(writer).name,
             isCurrentSession: writer.toLowerCase() === trueOwner,
           });
         }
@@ -100,13 +107,14 @@ export default function NftViewer({ nft, isEditable, openWindow }) {
         console.warn("Base lore query failed, falling back to cache:", e);
         // Fallback to boot cache
         const cached = nft._loreHistory || loreMap[String(tid)] || [];
-        cached.forEach(h => {
+        for (const h of cached) {
+          const wp = await fetchProfile(h.writer);
           loreEntries.push({
             ...h,
-            displayName: resolveDisplayName(h.writer).name,
+            displayName: wp?.name || resolveDisplayName(h.writer).name,
             isCurrentSession: h.writer.toLowerCase() === trueOwner,
           });
-        });
+        }
       }
 
       setLoreEntries(loreEntries);
